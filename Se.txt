@@ -1,0 +1,208 @@
+//SECOND.CC WIRED NETWORK SIMUATION
+go to tracemetrics>>>java -jar tracemetrics.jar
+wireshark
+open netanim-3.109>>./NetAnim >>> select XML file
+open terminal:gnuplot
+git --versionja
+
+#include "ns3/netanim-module.h"
+
+//3p2p and 2csma
+
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
+
+#include "ns3/applications-module.h"
+#include "ns3/core-module.h"
+#include "ns3/csma-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/network-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/netanim-module.h"
+
+// Default Network Topology
+//
+//       10.1.1.0
+// n0 ---- n1 ---- n2   n3   n4   n5
+//    point-to-point  |    |    |
+//                    ================
+//                      LAN 10.1.2.0
+
+using namespace ns3;
+
+NS_LOG_COMPONENT_DEFINE("ModifiedNetworkExample");
+
+int main(int argc, char* argv[]) {
+    bool verbose = true;
+    uint32_t nCsma = 2;  // 3 CSMA nodes total (one is shared with P2P)
+
+    CommandLine cmd(__FILE__);
+    cmd.AddValue("nCsma", "Number of extra CSMA nodes/devices", nCsma);
+    cmd.AddValue("verbose", "Enable verbose logging", verbose);
+    cmd.Parse(argc, argv);
+
+    if (verbose) {
+        LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
+        LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
+    }
+
+    NodeContainer p2pNodes;
+    p2pNodes.Create(3); // Three P2P nodes
+
+    NodeContainer csmaNodes;
+    csmaNodes.Add(p2pNodes.Get(2)); // Connecting last P2P node to CSMA
+    csmaNodes.Create(nCsma); // Additional CSMA nodes
+
+    // Setup P2P links
+    PointToPointHelper pointToPoint;
+    pointToPoint.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
+    pointToPoint.SetChannelAttribute("Delay", StringValue("2ms"));
+
+    NetDeviceContainer p2pDevices1, p2pDevices2;
+    p2pDevices1 = pointToPoint.Install(p2pNodes.Get(0), p2pNodes.Get(1));
+    p2pDevices2 = pointToPoint.Install(p2pNodes.Get(1), p2pNodes.Get(2));
+
+    // Setup CSMA network
+    CsmaHelper csma;
+    csma.SetChannelAttribute("DataRate", StringValue("100Mbps"));
+    csma.SetChannelAttribute("Delay", TimeValue(NanoSeconds(6560)));
+
+    NetDeviceContainer csmaDevices = csma.Install(csmaNodes);
+
+    // Install Internet Stack
+    InternetStackHelper stack;
+    stack.Install(p2pNodes);
+    stack.Install(csmaNodes);
+
+    // Assign IP Addresses
+    Ipv4AddressHelper address;
+    address.SetBase("10.1.1.0", "255.255.255.0");
+    Ipv4InterfaceContainer p2pInterfaces1 = address.Assign(p2pDevices1);
+    
+    address.SetBase("10.1.2.0", "255.255.255.0");
+    Ipv4InterfaceContainer p2pInterfaces2 = address.Assign(p2pDevices2);
+
+    address.SetBase("10.1.3.0", "255.255.255.0");
+    Ipv4InterfaceContainer csmaInterfaces = address.Assign(csmaDevices);
+
+    // Setup UDP Echo Server on last CSMA node
+    UdpEchoServerHelper echoServer(9);
+    ApplicationContainer serverApps = echoServer.Install(csmaNodes.Get(nCsma));
+    serverApps.Start(Seconds(1.0));
+    serverApps.Stop(Seconds(10.0));
+
+    // Setup UDP Echo Client on first P2P node
+    UdpEchoClientHelper echoClient(csmaInterfaces.GetAddress(nCsma), 9);
+    echoClient.SetAttribute("MaxPackets", UintegerValue(1));
+    echoClient.SetAttribute("Interval", TimeValue(Seconds(1.0)));
+    echoClient.SetAttribute("PacketSize", UintegerValue(1024));
+
+    ApplicationContainer clientApps = echoClient.Install(p2pNodes.Get(0));
+    clientApps.Start(Seconds(2.0));
+    clientApps.Stop(Seconds(10.0));
+
+    // Enable Routing
+    Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+    // Enable PCAP Tracing
+    pointToPoint.EnablePcapAll("modified_network");
+    csma.EnablePcap("modified_network", csmaDevices.Get(1), true);
+
+    // Setup Animation
+    AnimationInterface anim("ModifiedAnim1.xml");
+    anim.SetConstantPosition(p2pNodes.Get(0), 10.0, 10.0);
+    anim.SetConstantPosition(p2pNodes.Get(1), 30.0, 20.0);
+    anim.SetConstantPosition(p2pNodes.Get(2), 50.0, 30.0);
+    anim.SetConstantPosition(csmaNodes.Get(0), 60.0, 40.0);
+    anim.SetConstantPosition(csmaNodes.Get(1), 80.0, 50.0);
+    anim.SetConstantPosition(csmaNodes.Get(2  ), 100.0, 60.0);
+
+    // Run Simulation
+    Simulator::Run();
+    Simulator::Destroy();
+    return 0;
+}
+
+
+AnimationInterface anim("ICT338.xml");
+anim.SetConstantPosition(p2pNodes.Get(0),10.0,10.0);
+anim.SetConstantPosition(p2pNodes.Get(1),30.0,20.0);
+anim.SetConstantPosition(csmaNodes.Get(1),80.0,30.0);
+anim.SetConstantPosition(csmaNodes.Get(2),50.0,40.0);
+anim.SetConstantPosition(csmaNodes.Get(3),20.0,50.0);
+
+
+
+run the code
+
+go to ns-3.43>>> ./ns3 run scratch/second.cc
+open netanim-3.109>>./NetAnim >>> select XML file(ICT338.xml)//ns3 folder
+
+//CREATE PCAC FILE
+
+ pointToPoint.EnablePcapAll("ICT338p2p.pcap");
+ csma.EnablePcap("ICT338p2p.pcap", csmaDevices.Get(1), true);
+
+
+// ENABLE TRACEMETRICS
+  AsciiTraceHelper ascii;
+  pointToPoint.EnableAsciiAll(ascii.CreateFileStream("ict338p2p.tr"));  
+  csma.EnableAsciiAll(ascii.CreateFileStream("ict338csma.tr"));
+
+  go to tracemetrics>>>java -jar tracemetrics.jar
+    
+
+
+
+//DATA OR TXT
+Model	BatteryCapacity(mAh)	ScreenSize(inches)	Price(USD)
+SAMSUNG	4000	6.1	700
+Xiaomi	3200	5.5	600
+Nokia	4500	6.4	800
+VIVO	3700	6.0	750
+OPPO	3000	5.8	550
+POCO	4200	6.2	850
+SONY	3500	5.7	680
+HUAWEI	3800	6.3	720
+APPLE	4100	6.5	900
+REALME	3400	6.0	670
+//PLT FILE OR TXT
+set terminal pdf
+set terminal png
+set output "SmartphoneAnalysis.pdf"
+set title  "Smartphone Attributes"
+set xlabel "Price(USD)"
+set ylabel "Capacity(mAh)"
+plot "ICT338.txt" using 3:2 with lines title "Battery Capacity vs Price"
+set ylabel "Screen Size(Inches)"
+plot "ICT338.txt" using 3:2 with linespoints title "Screen Size vs Price"
+
+set terminal pdf
+set output "ipl.pdf"
+set title "2022 IPL points table"
+
+set style data histogram
+set style fill solid
+set style histogram cluster
+
+set xtics rotate by -45
+set xtics font ",10"
+set xlabel "Teams"
+
+plot "IPL.data" using 2:xtic(1) title "Wins", \
+     "" using 3 title "Losses", \
+     "" using 4 title "Points"
+
+gnuplot ICT338.plt
+
+
+
+
+
+
+
+
+
+
